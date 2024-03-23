@@ -80,6 +80,8 @@ int c_fifos[3]={0,0,0};
 char tokens[3][MAXLINE];
 char errors[3][MAXLINE]={"Object does not exist", "Object belongs to a different client", "Object already exists"};
 struct pollfd pfds[NCLIENT+1]; // managing socket + NClients  
+int done[NCLIENT+1];
+int zeroFrame=0;
 
 
  
@@ -139,14 +141,14 @@ void Done(int id){
     ServerFrame frame;
     memset((char *) &frame, 0, sizeof(frame));
     frame.kind=2;
-    write(pfds[id+1].fd, (char *) &frame, sizeof(frame));
+    write(pfds[id].fd, (char *) &frame, sizeof(frame));
 }
 
 void Hello(int id){
     ServerFrame frame;
     memset((char *) &frame, 0, sizeof(frame));
     frame.kind=2;
-    write(pfds[id+1].fd, (char *) &frame, sizeof(frame));
+    write(pfds[id].fd, (char *) &frame, sizeof(frame));
 }
 
 
@@ -168,7 +170,7 @@ Object Get(char* object_name,int id){
             frame.object=object;
             frame.kind=0;
             strcpy(frame.status,"OK");
-            write (pfds[id+1].fd, (char *) &frame, sizeof(frame)); // send frame to client
+            write (pfds[id].fd, (char *) &frame, sizeof(frame)); // send frame to client
             return object; // success         
         }
 
@@ -176,7 +178,7 @@ Object Get(char* object_name,int id){
 
     frame.kind=6;
     strcpy(frame.status,"Error: Object does not exist");
-    write (pfds[id+1].fd, (char *) &frame, sizeof(frame)); // send frame to client
+    write (pfds[id].fd, (char *) &frame, sizeof(frame)); // send frame to client
     return object; // failure, not found (error)
 
 }
@@ -188,7 +190,7 @@ int Put(ClientFrame* frame,int id){
     if(exists(frame->object_name)){
         strcpy(s_frame.status,"Error: Object already exists");
         s_frame.kind=6;
-        write (pfds[id+1].fd, (char *) &s_frame, sizeof(s_frame)); // send frame to client
+        write (pfds[id].fd, (char *) &s_frame, sizeof(s_frame)); // send frame to client
         return 3;
     }
     
@@ -205,7 +207,7 @@ int Put(ClientFrame* frame,int id){
             }
             strcpy(s_frame.status,"OK");
             s_frame.kind=1;
-            write (pfds[id+1].fd, (char *) &s_frame, sizeof(s_frame)); // send frame to client
+            write (pfds[id].fd, (char *) &s_frame, sizeof(s_frame)); // send frame to client
             
             return 0; // success
         }
@@ -237,21 +239,21 @@ int Delete(char* object_name,int id){
                 s_frame.kind=6;
                 strcpy(s_frame.status,"Error: Object belongs to a different client");
                 s_frame.kind=6;
-                write (pfds[id+1].fd, (char *) &s_frame, sizeof(s_frame)); // send frame to client
+                write (pfds[id].fd, (char *) &s_frame, sizeof(s_frame)); // send frame to client
                 return 2;
             }
 
             memset(&table[i],0,sizeof(Object)); // delete object by reinitializing 
             strcpy(s_frame.status,"OK");
             s_frame.kind=2;
-            write (pfds[id+1].fd, (char *) &s_frame, sizeof(s_frame)); // send frame to client        
+            write (pfds[id].fd, (char *) &s_frame, sizeof(s_frame)); // send frame to client        
             return 1; // success
         }
     }
 
     strcpy(s_frame.status,"Error: Object does not exist");
     s_frame.kind=6;
-    write (pfds[id+1].fd, (char *) &s_frame, sizeof(s_frame)); // send frame to client
+    write (pfds[id].fd, (char *) &s_frame, sizeof(s_frame)); // send frame to client
     return 1; // error no available space 
    
 }
@@ -267,7 +269,7 @@ double Gtime(int id){
     double time =  (double)(end2-start2) / (double) sysconf(_SC_CLK_TCK);
     strcpy(s_frame.status,"OK");
     s_frame.time=time;
-    write (pfds[id+1].fd, (char *) &s_frame, sizeof(s_frame)); // send frame to client 
+    write (pfds[id].fd, (char *) &s_frame, sizeof(s_frame)); // send frame to client 
     return time;
 
 }
@@ -464,15 +466,25 @@ int split(char * inStr, int id) // split function used from starter code file
 }
 
 
-ClientFrame receive (int fd)
+ClientFrame receive(int fd,int id)
 {
     int    len; 
     ClientFrame  frame;
     assert (fd >= 0);
     memset( (char *) &frame, 0, sizeof(frame));
-    len = read (fd, (char *) &frame, sizeof(frame));
-    if (len != sizeof(frame))
+    len = read(fd, (char *) &frame, sizeof(frame));
+
+    if(len==0){
+        printf("Lost connection to client %d\n",id);
+        done[id]=1;
+        zeroFrame=1;
+    }
+
+    else if (len != sizeof(frame))
         WARNING ("Received frame has length= %d (expected= %d)\n", len, sizeof(frame));
+
+
+
     return frame;         
 }
 
@@ -539,20 +551,19 @@ void server(int port){
     memset( (char *) &cframe, 0, sizeof(cframe) );
 
 
-    int   i, N, len, done[NCLIENT+1];
+    int   i, N, len;
 
 
     int timeout=25; // timeout in ms 
 
 
-    struct pollfd pfds[NCLIENT+1]; // managing socket + NClients  
     struct sockaddr_in  from;
     socklen_t           fromlen;
 
     for (i= 1; i <= NCLIENT; i++){
         done[i]= -1;
     }
-    pfds[0].fd=  serverListen (PORT, NCLIENT);;
+    pfds[0].fd =  serverListen (PORT, NCLIENT);
     pfds[0].events= POLLIN;
     pfds[0].revents= 0;
 
@@ -560,14 +571,13 @@ void server(int port){
     
     N = 1;		// N descriptors to poll
     while(1) {
-        if((ret=poll(pfds,1,timeout)) < 0){ // poll error 
+        if((ret=poll(pfds,NCLIENT+1,timeout)) < 0){ // poll error 
             perror("poll: ");
         } 
         if ( (N < NCLIENT+1) && (pfds[0].revents & POLLIN)) {
            // accept a new connection
 	        fromlen= sizeof(from);
 	        pfds[N].fd= accept(pfds[0].fd, (SA *) &from, &fromlen);
-
 	        pfds[N].events= POLLIN;
 	        pfds[N].revents= 0;
 	        done[N]= 0;
@@ -576,11 +586,14 @@ void server(int port){
 
 
         if(ret>0){ // available data
-            for (int i=0;i<1;i++){
-                if(pfds[i].revents && POLLIN){
+            for (int i=1;i<2;i++){
+                if(pfds[i].revents && POLLIN && done[i]==0){
                     ClientFrame cframe;
-                    cframe=receive(pfds[i].fd); // pass fd2 to receive frame; 
-                    processCFrame(&cframe);
+                    cframe=receive(pfds[i].fd, i); // pass fd2 to receive frame; 
+                    if(zeroFrame==0){
+                        processCFrame(&cframe);
+                    }
+                    zeroFrame=0;
                     pfds[i].revents=0; // reset revents field
                     pfds[i].events=POLLIN;
                 }
@@ -588,8 +601,7 @@ void server(int port){
             
         }
 
-        if (testDone(done,N-1) == 1) break;
-
+        //if (testDone(done,N-1) == 1) break;
 
     }
 
@@ -605,14 +617,13 @@ void client(char *inputFile, int id, char *sname, int port){
     ClientFrame hello;
     memset((char *) &hello, 0, sizeof(hello));
     hello.kind=HELLO;
+    hello.identifier=id;
     
     strcpy (serverName, sname);
     printf ("Client: Trying server '%s', portNo= %d\n", serverName, port);
     if((sfd = clientConnect (serverName, port)) < 0){
         perror("socket");
     }
-
-
 
     FILE *fd;
     int transmit;
@@ -767,11 +778,13 @@ int clientConnect (const char *serverName, int portNo)
 
     // create a socket, and initiate a connection
     //
-    if ( (sfd= socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    if ( (sfd= socket(AF_INET, SOCK_STREAM, 0)) < 0){
         FATAL ("clientConnect: failed to create a socket \n");
+    }
 
-    if (connect(sfd, (SA *) &server, sizeof(server)) < 0)
-	FATAL ("clientConnect: failed to connect \n");
+    if (connect(sfd, (SA *) &server, sizeof(server)) < 0){
+	    FATAL ("clientConnect: failed to connect \n");
+    }
 
     return sfd;
 }
@@ -846,7 +859,7 @@ int main(int argc, char * argv[]){
     }
     else if (strcmp(argv[1],"-c")==0 && argc == 6){
        
-        client(argv[3],atoi(argv[2]),atoi(argv[4]),atoi(argv[5])); // pass input file and idNumber=1
+        client(argv[3],atoi(argv[2]),argv[4],atoi(argv[5])); // pass input file and idNumber=1
     }
     
     else{

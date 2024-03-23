@@ -73,7 +73,9 @@ char req[5][6]={"GET", "PUT", "DELETE", "GTIME", "TIME"};
 char server_fifos[3][MAXLINE]={"fifo-0-1","fifo-0-2","fifo-0-3"};
 char client_fifos[3][MAXLINE]={"fifo-1-0","fifo-2-0","fifo-3-0"};
 char errors[3][MAXLINE]={"Object does not exist", "Object belongs to a different client", "Object already exists"};
-struct pollfd pfds[NCLIENT+1]; // managing socket + NClients  
+struct pollfd pfds[NCLIENT+2]; // managing socket + NClients  + stdin
+int done[NCLIENT+2];
+
 
 
 struct tms tstart; 
@@ -83,7 +85,7 @@ time_t start;
 int s_fifos[3]={0,0,0};
 int c_fifos[3]={0,0,0};
 char tokens[3][MAXLINE];
-
+int zeroFrame=0;
  
 
 
@@ -327,7 +329,7 @@ void printSframe(ServerFrame *frame, int kind,int identifier, char* object_name)
 }
 
 
-void processCFrame (ClientFrame *frame) // process frame and print 
+void processCFrame(ClientFrame *frame) // process frame and print 
 {
     
     int kind = frame -> kind;
@@ -420,10 +422,6 @@ void processCFrame (ClientFrame *frame) // process frame and print
 
 
 
-
-
-
-
 int split(char * inStr, int id) // split function used from starter code file
 {
     const char fs[] = " \n\t";
@@ -474,14 +472,20 @@ int split(char * inStr, int id) // split function used from starter code file
 }
 
 
-ClientFrame receive (int fd)
+ClientFrame receive(int fd,int id)
 {
     int    len; 
     ClientFrame  frame;
     assert (fd >= 0);
     memset( (char *) &frame, 0, sizeof(frame));
     len = read (fd, (char *) &frame, sizeof(frame));
-    if (len != sizeof(frame))
+    if(len==0){
+        printf("Lost connection to client %d\n",id-1);
+        done[id]=1;
+        zeroFrame=1;
+    }
+
+    else if (len != sizeof(frame))
         WARNING ("Received frame has length= %d (expected= %d)\n", len, sizeof(frame));
     return frame;         
 }
@@ -631,9 +635,7 @@ void server(int port){
     memset((char *) &table,0,sizeof(table)); // initialize to 0's
     memset( (char *) &cframe, 0, sizeof(cframe) );
 
-    int   i, N, len, done[NCLIENT+1];
-
-
+    int   i, N, len;
 
     struct sockaddr_in  from;
     socklen_t  fromlen;
@@ -652,6 +654,9 @@ void server(int port){
 
     int timeout=25; // timeout in ms 
     N=2;
+
+
+    printf ("Server is accepting connections (port= %d)\n", PORT);
 
     while(1){
 
@@ -680,10 +685,13 @@ void server(int port){
             }
         
             for (int i=2;i<NCLIENT+2;i++){
-                if(pfds[i].revents && POLLIN){
+                if(pfds[i].revents && POLLIN && done[i]==0){
                     ClientFrame cframe;
-                    cframe=receive(pfds[i].fd); // pass fd2 to receive frame; 
-                    processCFrame(&cframe);
+                    cframe=receive(pfds[i].fd,i); // pass fd2 to receive frame; 
+                    if(zeroFrame==0){
+                        processCFrame(&cframe);
+                    }
+                    zeroFrame=0;
                     pfds[i].revents=0; // reset revents field
                     pfds[i].events=POLLIN;
                 }
@@ -709,7 +717,7 @@ void client(char *inputFile, int id, char *sname, int port){
     ClientFrame hello;
     memset((char *) &hello, 0, sizeof(hello));
     hello.kind=HELLO;
-    
+    hello.identifier=id;
     strcpy (serverName, sname);
     printf ("Client: Trying server '%s', portNo= %d\n", serverName, port);
     if((sfd = clientConnect (serverName, port)) < 0){
@@ -855,7 +863,7 @@ int main(int argc, char * argv[]){
     }
     else if (strcmp(argv[1],"-c")==0 && argc == 6){
        
-        client(argv[3],atoi(argv[2]),atoi(argv[4]),atoi(argv[5])); // pass input file and idNumber=1
+        client(argv[3],atoi(argv[2]),argv[4],atoi(argv[5])); // pass input file and idNumber=1
     }
     
     else{

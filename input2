@@ -1,7 +1,6 @@
-# Transactions file for two clients
-# a3p2 -s 2222
-#    a3p2 -c 1 a3p2-w24-ex1.dat ug03.cs.ualberta.ca 2222
-#    a3p2 -c 2 a3p2-w24-ex1.dat ug03.cs.ualberta.ca 2222
+# Transactions file for one client
+# a3p1 -s 2222
+#    a3p1 -c 1 a3p1-w24-ex1.dat ug03.cs.ualberta.ca 2222
 1 gtime
 1 put   video1.mp4
 {
@@ -18,26 +17,14 @@
 {
    index1.html: line 1
 }
+1 put doc1.tex
+{
+}
 1 delay 2500
-2 gtime
-2 put    index2.html
-{
-   index2.html: line 1
-   index2.html: line 2
-   index2.html: line 3
-}
-2 put     doc2.tex
-{
-   doc2.tex: line 1
-   doc2.tex: line 2
-}
-2 delay 1500
 1 gtime
-1 get   index2.html
-1 get     index3.html
-1 delete  doc2.tex
-1 delay   3000
-2 get     index1.html
-2 delay   3000
+1 get  video1.mp4
+1 get  img1.jpg
+1 get    index2.html
+1 delete img2.jpg
+1 delay  3000
 1 gtime 1 quit
-2 gtime 2 quit
