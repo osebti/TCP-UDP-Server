@@ -6,8 +6,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 
-
-#define MAX_LINE_SIZE 1024
+#define MAX_LINE_SIZE 80
 #define MAX_SEQ_NUM 1000
 #define SERV_PORT 3000
 // Message Iypes
@@ -15,7 +14,7 @@
 #define ACK_TYPE 2
 #define NAK_TYPE 3
 
-//Message Structures
+//Message Structure
 struct Message {
 int type;
 int seqNum;
@@ -62,7 +61,7 @@ void server(){
             seqExpected++;
         }
         else{
-            sendMsg. type= NAK_TYPE;
+            sendMsg.type= NAK_TYPE;
             sendMsg.seqNum = recvMsg.seqNum;
 
         }
@@ -139,7 +138,7 @@ void client (const char *serverName, const char *dataFile, int nLine){
             }
 
             else{
-                printf ("Received: NAK(%d)\n", recvMsg. seqNum);
+                printf ("Received: NAK(%d)\n", recvMsg.seqNum);
 
             }
         }
@@ -240,6 +239,22 @@ Received: DATA(3341)
 Transmitted: ACK(3341)
 Received: DATA(6696)
 Transmitted: NAK(6696)
+
+
+
+Experiments: 
+Size: 20 => All data was transmitted (no NAK)
+Size: 40 => All data was transmitted (no NAK)
+Size: 60 => All data was transmitted (no NAK)
+
+
+
+Size: 80 => NAK; Sequence Number: 7324
+Sequence Leading Up to NAK:
+Received: DATA(4782)
+Transmitted: ACK(4782)
+Received: DATA(7324)
+Transmitted: NAK(7324)
 
 */
 

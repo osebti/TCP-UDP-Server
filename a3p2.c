@@ -569,7 +569,7 @@ int clientConnect (const char *serverName, int portNo)
     memset ((char *) &server, 0, sizeof server);
     memcpy ((char *) &server.sin_addr, hp->h_addr, hp->h_length);
     server.sin_family= AF_INET;
-    server.sin_port= htons(portNo);
+    server.sin_port= htons(portNo); 
 
     // create a socket, and initiate a connection
     //
