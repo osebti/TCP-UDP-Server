@@ -220,8 +220,8 @@ Therefore, it does not conform to the specifications.
 
 /*
 The server obtains the client's protocal address by using the recvfrom function. It uses a variable 
-name cli_addr (of type sockaddr_in) in the recvfrom function as well as the size of cli_addr in bytes.
-which is stored in the variable clilen. The recvfrom function will then
+name cli_addr (of type sockaddr_in)  as an argument in the recvfrom function as well as the size of 
+cli_addr in bytes which is stored in the variable clilen. The recvfrom function will then
 fill in the variable cli_addr's port number and ip address when a client sends a message. This 
 ensures the protocal address is successfully retrieved. 
 */

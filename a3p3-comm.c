@@ -199,9 +199,10 @@ Need to use  htonl on INADDR_ANY (server function) to avoid potential errors
 // Q3
 
 /*
-No although a3-p3-comm.c achieves 2 way communication it only transmits the one line from the
-input file in each transmission independently of the argument specified by the user (nLines).
-Therefore, it does not conform to the specifications.
+No although a3-p3-comm.c achieves 2 way communication in the way described by the 
+specifications, it only transmits the one line from the input file in each transmission 
+independently of the argument specified by the user (nLines). Therefore, it does not 
+conform to the specifications. 
 
 */
 

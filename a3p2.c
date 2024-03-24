@@ -86,6 +86,7 @@ int s_fifos[3]={0,0,0};
 int c_fifos[3]={0,0,0};
 char tokens[3][MAXLINE];
 int zeroFrame=0;
+int finished=0;
  
 
 
@@ -329,7 +330,7 @@ void printSframe(ServerFrame *frame, int kind,int identifier, char* object_name)
 }
 
 
-void processCFrame(ClientFrame *frame) // process frame and print 
+void processCFrame(ClientFrame *frame, int index) // process frame and print 
 {
     
     int kind = frame -> kind;
@@ -410,6 +411,7 @@ void processCFrame(ClientFrame *frame) // process frame and print
         printf("Received (src = client:%d)  DONE\n", identifier, object_name);
         Done(identifier);
         printf ("Transmitted (src = server) (OK)\n\n\n");
+        done[index]=1;
 
     }
 
@@ -515,11 +517,10 @@ int testDone (int done[], int num_clients)
 void executeCommand(char *command){
     if (strcmp(command,"quit")==0){
         // print system cpu time, etc. 
-        printf("Quitting\n");
-        for(int i=0; i<3;i++){ // close fifos before termination 
-            close(s_fifos[i]);
-            close(c_fifos[i]);
-        }
+        printf("Quitting and closing main socket\n");
+       
+        close(pfds[0].fd); // close managing socket
+       
         if((end2=times(&tend))==-1){
             perror("times error");
         }
@@ -656,7 +657,7 @@ void server(int port){
     N=2;
 
 
-    printf ("Server is accepting connections (port= %d)\n", PORT);
+    printf ("Server is accepting connections (port= %d)\n", port);
 
     while(1){
 
@@ -689,7 +690,7 @@ void server(int port){
                     ClientFrame cframe;
                     cframe=receive(pfds[i].fd,i); // pass fd2 to receive frame; 
                     if(zeroFrame==0){
-                        processCFrame(&cframe);
+                        processCFrame(&cframe,i);
                     }
                     zeroFrame=0;
                     pfds[i].revents=0; // reset revents field
@@ -826,7 +827,11 @@ void client(char *inputFile, int id, char *sname, int port){
                     printf("*** Exiting delay period\n\n\n");   
                 }
                 else if (strcmp(tokens[1],"quit")==0){
-                    return;               
+                    frame.kind=DONE;
+                    status = 0;       
+                    write (sfd, (char *) &frame, sizeof(frame)); // send frame to server
+                    printf("Transmitted (src = %d) DONE\n",id);    
+                    finished=1;         
                 }
                 else{
                     printf("Invalid Command\n");
@@ -848,6 +853,10 @@ void client(char *inputFile, int id, char *sname, int port){
             }
             printSframe(&s_frame,s_frame.kind,id,frame.object_name);  
             status=1;
+            if(finished){
+                printf("Closing Connection\n");
+                return;
+            }
         }
     }
 }
